@@ -6,6 +6,8 @@ from tqdm import tqdm
 import cv2
 import os
 
+from dataset_utils import filename_to_date
+
 # (4)  指定したディレクトリ内の全てのnpyファイルを一つの動画予測形式のndarrayバイナリファイルに変換
 # タイムドリブンでまとめ、画像のない、または破損したデータの含まれる期間はスキップする
 # 3分くらい
@@ -37,27 +39,54 @@ def find_date_in_range(dates, start_date, end_date):
     return None  # 範囲内の日付が見つからなかった場合
 
 
+def handle_sequence(seq_len, width, channels_n, delta, now_frame):
+    seq = np.zeros((seq_len, width, width, channels_n), dtype=np.float64)
+    seq_files = [] 
+
+    for channel in range(channels_n): #チャンネルごとに探す
+        files = files_list[channel]
+        dates = dates_list[channel]
+
+        for j in range(seq_len): 
+            start_date_search = now_frame - timedelta(minutes=2) #ダウンロードするわけではないので広めに許容誤差を取る
+            end_date_search   = now_frame + timedelta(minutes=2)
+
+            #rangeに収まる壊れていないファイルを探す
+            date_index = find_date_in_range(dates, start_date_search, end_date_search)
+            if date_index is not None:
+                file = files.pop(k)
+                dates.pop(k)
+                try:
+                    img = np.load(file) #npyファイルを読み込み
+                except: #外部ファイル操作関連は失敗が多いのでエラーキャッチを用意しておく
+                    print('\nLoad failed',file)
+                    return None
+
+                seq[j, :, :, channel] = img
+                seq_files.append(os.path.basename(file)) #割り当て表のために保存
+                #3波長の仕様にあわせて要変更
+                now_frame += timedelta(hours=delta) #時間を次に進める
+
+            else: #rangeに収まるファイルがない場合
+                print('\nNo image: ',now_frame)
+                return None
+
+    return seq, seq_files
+
 
 def main(args):
-    sources = [args.source_1, args.source_2, args.source_3]
-    channels = sum(s is not None for s in sources)
+    src_dirs = [args.source_1, args.source_2, args.source_3]
+    channels_n = 3 # 3波長
 
     files_list = []
     dates_list = []
-    for i in range(channels):
-        files = sorted(glob.glob(sources[i] + "/*"))
+    for i in range(channels_n):
+        files = sorted(glob.glob(src_dirs[i] + "/*"))
         files_list.append[files]
 
         dates = []
         for file in files:
-            basename = os.path.basename(file)
-            year = int(basename[17:21])
-            month = int(basename[22:24])
-            day = int(basename[25:27])
-            hour = int(basename[28:30])
-            minute = int(basename[30:32])
-            second = int(basename[32:34])
-            dates.append(datetime(year, month, day, hour, minute, second))
+            dates.append(filename_to_date(file))
 
         dates_list.append(sorted(dates))
 
@@ -74,55 +103,21 @@ def main(args):
     width = sample_img.shape[1]
     lack_count = 0
     i = 0
-    text = []
+    assignment_text = []
     now_seq = start_date
-    data = np.zeros((args.seq_len, data_len, width, width, args.channels), dtype=np.float64)
+    data = np.zeros((args.seq_len, data_len, width, width, channels_n), dtype=np.float64)
 
 
     while now_seq + timedelta(days=day_per_seq) < end_date:
         print('\r', i, '/', data_len - lack_count,end='')
-        seq = np.zeros((args.seq_len, width, width, channels), dtype=np.float64)
-        seq_files = [] 
-        now_frame = now_seq #時間単位で動かすdatetimeオブジェクト。now_seqとは違う動かし方をするので分ける。
-        lack_flag = False
 
-        for channel in range(channels):
-            files = files_list[channel]
-            dates = dates_list[channel]
-
-            for j in range(args.seq_len):
-                start_date_search = now_frame - timedelta(minutes=5) #ダウンロードするわけではないので広めに許容誤差を取る
-                end_date_search   = now_frame + timedelta(minutes=5)
-
-                #rangeに収まる壊れていないファイルを探す
-                date_index = find_date_in_range(dates, start_date_search, end_date_search)
-                if date_index is not None:
-                    file = files.pop(k)
-                    dates.pop(k)
-                    try:
-                        img = np.load(file) #npyファイルを読み込み
-                    except: #外部ファイル操作関連は失敗が多いのでエラーキャッチを用意しておく
-                        print('\n!! load_failed',file)
-                        lack_flag = True 
-                        break
-
-                    seq[j, :, :, channel] = img
-                    seq_files.append(os.path.basename(file))
-                    now_frame += timedelta(hours=args.delta) #時間を次に進める
-
-                else: #rangeに収まるファイルがない場合
-                    print('\nNo image: ',now_frame)
-                    lack_flag = True 
-                    break
-
-            if lack_flag: break
-
-        if lack_flag:
-            lack_count += 1
-        else:
-            data[:, i, :, :, :] = seq #欠如がなければdataにseqを追加
-            text.append(f'{seq_files}\n') # 割り当て表のためのテキスト追加
+        seq_res = handle_sequence()
+        if seq_res is not None:
+            data[:, i, :, :, :] = seq_res[0] #欠損がなければdataにseqを追加
+            assignment_text.append(f'{seq_res[1]}\n') # 割り当て表のためのテキスト追加
             i += 1
+        else:
+            lack_count += 1
 
         now_seq += timedelta(hours=args.delta * args.seq_len) #次のseqの始まりまで日付を進める
 
@@ -153,22 +148,22 @@ def main(args):
     print('Data generation finished')
 
     for i in range(train_len):
-        text[i] = f'train {text[i]}'
+        assignment_text[i] = f'train {text[i]}'
     for i in range(val_len):
-        text[train_len + i] = f'val {text[train_len + i]}'
+        assignment_text[train_len + i] = f'val {text[train_len + i]}'
     for i in range(test_len):
-        text[train_len + val_len + i] = f'test {text[train_len + val_len + i]}'
+        assignment_text[train_len + val_len + i] = f'test {text[train_len + val_len + i]}'
         
     with open('dataset_date_assignment.txt', mode='w') as f:
-        f.writelines(text)
+        f.writelines(assignment_text)
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='convert multi npy to single npy file')
-    parser.add_argument('source_1', type=str)
-    parser.add_argument('--source_2', type=str, required=False)
-    parser.add_argument('--source_3', type=str, required=False)
+    parser.add_argument('--src_dir_1', default='/mnt/hdd1/sasaki/MAU_data/1_downloded_fits/211', type=str)
+    parser.add_argument('--src_dir_2', default='/mnt/hdd1/sasaki/MAU_data/1_downloded_fits/193', type=str)
+    parser.add_argument('--src_dir_3', default='/mnt/hdd1/sasaki/MAU_data/1_downloded_fits/171', type=str)
     parser.add_argument('--dataset_name', type=str, required=True)
     parser.add_argument('--seq_len', type=int, required=True)
     parser.add_argument('--delta', type=int, required=True)

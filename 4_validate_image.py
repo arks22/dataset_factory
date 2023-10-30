@@ -4,37 +4,24 @@ from tqdm import tqdm
 import cv2
 import argparse
 import numpy as np
-import shutil
 
+from dataset_utils import filename_to_date
 
 # 画像の破損をチェックする
 # ギャンギャンに彩度(?)をあげて、リム部分の要素を見て判断。
-# 破損していた場合該当の画像を削除。
 # 27000枚で50分くらい
 
-parser = argparse.ArgumentParser(description='Validate images')
-parser.add_argument('source', type=str)
-parser.add_argument('--broken_dir', type=str)
-parser.add_argument('--out_dir', type=str)
-args = parser.parse_args()
 
+judge_size = 512
 
-def download(range_head, range_end):
-    series = 'aia.lev1_euv_12s'
-    email  = 'sasaki.10222022@gmail.com'
-    client = jsoc.JSOCClient()  
+# 画像破損判定のための配列
+len_from_center = np.zeros((judge_size, judge_size))
+center = ((len_from_center.shape[0] - 1) / 2, (len_from_center.shape[1] - 1) / 2)
 
-    range_head = parse_time(range_head)
-    range_end  = parse_time(range_end)
-    response = client.search(a.Time(range_head,range_end),
-                             a.jsoc.Series(series),
-                             a.jsoc.Segment('image'),
-                             a.Wavelength(args.wave*u.AA),
-                             a.Sample(1*u.day),
-                             a.jsoc.Notify(email))
-    print(response)
-    if not len(response) == 0:
-        requests = client.fetch(response, path=args.source, progress=True)
+# len_from_center に中心からの距離を格納
+for i in range(len_from_center.shape[0]):
+    for j in range(len_from_center.shape[1]):
+        len_from_center[i,j] = ((i - center[0]) ** 2 + (j - center[1]) ** 2 ) ** 0.5
 
 
 def is_image_broken(img, file):
@@ -63,21 +50,7 @@ def is_image_broken(img, file):
         return False
 
 
-def filename_to_date(filename):
-    basename = os.path.basename(filename)
-    year = int(basename[17:21])
-    month = int(basename[22:24])
-    day = int(basename[25:27])
-    hour = int(basename[28:30])
-    minute = int(basename[30:32])
-    second = int(basename[32:34])
-    date = datetime(year, month, day, hour, minute, second)
-
-    return date
-
-
 def handle_image(file):
-    # 
     try: 
         img = np.load(file)
 
@@ -89,25 +62,17 @@ def handle_image(file):
         print('Keyboard Interrupt')
         exit(1)
 
+    """
     except:
-        print('loading error', file)
-        os.remove(file) # 壊れた画像を削除
+        print('Loading error', file)
+        #os.remove(file) # 壊れた画像を削除
+    """
 
 
 
 def main(args):
-    judge_size = 512
-    # 画像破損判定のための配列
-    len_from_center = np.zeros((judge_size, judge_size))
-    center = ((len_from_center.shape[0] - 1) / 2, (len_from_center.shape[1] - 1) / 2)
 
-    # len_from_center に中心からの距離を格納
-    for i in range(len_from_center.shape[0]):
-        for j in range(len_from_center.shape[1]):
-            len_from_center[i,j] = ((i - center[0]) ** 2 + (j - center[1]) ** 2 ) ** 0.5
-
-
-    npy_files = sorted(glob(args.out_dir + '/*'))
+    npy_files = sorted(glob(args.src_dir + '/*'))
 
     for file in tqdm(npy_files):
         # 画像を処理
@@ -116,4 +81,12 @@ def main(args):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Validate imaes')
+    parser.add_argument('src_dir', type=str)
+    parser.add_argument('--broken_dir', type=str, required=True)
+    args = parser.parse_args()
+
+    if not os.path.exists(args.broken_dir):
+        raise FileNotFoundError(f"ディレクトリ {args.broken_dir} が存在しません。")
+
     main(args)

@@ -8,16 +8,16 @@ import argparse
 import matplotlib.pyplot as plt
 from astropy.io import fits
 
-# FITS ->　npy
+# (3) FITS(.fits) -> ndarrayバイナリファイル(.npy)　
 # チャンネルの次元も追加している
 # 27000枚で約2時間
 
 parser = argparse.ArgumentParser(description='convert 1 fits file to 1 npy file')
-parser.add_argument('source', type=str)
-parser.add_argument('--out_dir', type=str, default='.')
+parser.add_argument('src_dir', type=str)
+parser.add_argument('--dst_dir', type=str, default='.')
 args = parser.parse_args()
 
-fits_files = sorted(glob(args.source + '/*'))
+fits_files = sorted(glob(args.src_dir + '/*'))
 error_count = 0
 
 for file in tqdm(fits_files):
@@ -35,6 +35,6 @@ for file in tqdm(fits_files):
 
     img = img[..., np.newaxis]
     basename_without_ext = os.path.splitext(os.path.basename(file))[0]
-    np.save(os.path.join(args.out_dir,basename_without_ext), img)
+    np.save(os.path.join(args.dst_dir,basename_without_ext), img)
 
 print(f'load error count: {error_count}')

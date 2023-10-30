@@ -40,29 +40,16 @@ def find_date_in_range(dates, start_date, end_date):
 
 def main(args):
     sources = [args.source_1, args.source_2, args.source_3]
-    channels = sum(s is not None for s in sources)
 
-    files_list = []
-    dates_list = []
-    for i in range(channels):
-        files = sorted(glob.glob(sources[i] + "/*"))
-        files_list.append[files]
+    files = sorted(glob.glob(sources[i] + "/*"))
 
-        dates = []
-        for file in files:
-            basename = os.path.basename(file)
-            year = int(basename[17:21])
-            month = int(basename[22:24])
-            day = int(basename[25:27])
-            hour = int(basename[28:30])
-            minute = int(basename[30:32])
-            second = int(basename[32:34])
-            dates.append(datetime(year, month, day, hour, minute, second))
+    dates = []
+    for file in files:
+        dates.append(filename_to_date(file))
 
-        dates_list.append(sorted(dates))
 
-    start_date = dates_list[0][0]  #一つ目のチャンネルのソース基準で決定
-    end_date   = dates_list[0][-1] #一つ目のチャンネルのソース基準で決定
+    start_date = dates[0 ]
+    end_date   = dates-1]
     day_per_seq = (args.delta * args.seq_len / 24)
     data_len = int((end_date - start_date).days // day_per_seq)
 
@@ -70,25 +57,23 @@ def main(args):
     print('end date:', end_date)
     print('----------------------')
 
-    sample_img = np.load(files_list[0][0]) #サンプルのnpyファイルを読み込み
+    sample_img = np.load(files[0]) #サンプルのnpyファイルを読み込み
     width = sample_img.shape[1]
     lack_count = 0
     i = 0
     text = []
     now_seq = start_date
-    data = np.zeros((args.seq_len, data_len, width, width, args.channels), dtype=np.float64)
+    data = np.zeros((args.seq_len, data_len, width, width, 1), dtype=np.float64)
 
 
     while now_seq + timedelta(days=day_per_seq) < end_date:
         print('\r', i, '/', data_len - lack_count,end='')
-        seq = np.zeros((args.seq_len, width, width, channels), dtype=np.float64)
+        seq = np.zeros((args.seq_len, width, width, 1), dtype=np.float64)
         seq_files = [] 
         now_frame = now_seq #時間単位で動かすdatetimeオブジェクト。now_seqとは違う動かし方をするので分ける。
         lack_flag = False
 
         for channel in range(channels):
-            files = files_list[channel]
-            dates = dates_list[channel]
 
             for j in range(args.seq_len):
                 start_date_search = now_frame - timedelta(minutes=5) #ダウンロードするわけではないので広めに許容誤差を取る
@@ -106,7 +91,7 @@ def main(args):
                         lack_flag = True 
                         break
 
-                    seq[j, :, :, channel] = img
+                    seq[j, :, :, 1] = img
                     seq_files.append(os.path.basename(file))
                     now_frame += timedelta(hours=args.delta) #時間を次に進める
 
@@ -166,9 +151,7 @@ def main(args):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='convert multi npy to single npy file')
-    parser.add_argument('source_1', type=str)
-    parser.add_argument('--source_2', type=str, required=False)
-    parser.add_argument('--source_3', type=str, required=False)
+    parser.add_argument('source', type=str)
     parser.add_argument('--dataset_name', type=str, required=True)
     parser.add_argument('--seq_len', type=int, required=True)
     parser.add_argument('--delta', type=int, required=True)

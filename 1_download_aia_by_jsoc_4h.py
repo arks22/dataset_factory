@@ -6,7 +6,7 @@ import datetime
 import calendar
 
 parser = argparse.ArgumentParser()
-parser.add_argument('out_dir', type=str)
+parser.add_argument('dst_dir', type=str)
 parser.add_argument('--wave', type=int, required=True)
 parser.add_argument('--delta', type=int, required=True)
 parser.add_argument('--start_year', type=int, default=2010)
@@ -17,12 +17,11 @@ args = parser.parse_args()
 
 
 # (1) FITSをダウンロードして一つのディレクトリに格納
-# 4時間ごとのサンプリング幅で1日くらいかかる
+# 4時間ごとのサンプリング幅で1日くらい
 
 series = 'aia.lev1_euv_12s'
-#email  = 'sasaki.10222022@gmail.com'
+email  = 'sasaki.10222022@gmail.com'
 #email  = 'f22c017d@mail.cc.niigata-u.ac.jp'
-email  = 'sasaki..10222022@gmail.com'
 
 client = jsoc.JSOCClient()  
 
@@ -44,4 +43,4 @@ for year in years:
                              a.Sample(args.delta*u.hour), 
                              a.jsoc.Notify(email))
         print(response)
-        requests = client.fetch(response, path=args.out_dir, progress=True, sleep=45, overwrite=True)
+        requests = client.fetch(response, path=args.dst_dir, progress=True, sleep=45, overwrite=True)

@@ -41,7 +41,7 @@ def remove_unwanted_fits_files(target_dir):
             if is_near_target_time(time, target_hours):
                 continue  # 削除しない
             
-            os.remove(os.path.join(target_dir, file_name))
+            #os.remove(os.path.join(target_dir, file_name))
             count += 1
             print(f"削除されたファイル: {file_name}")
 
