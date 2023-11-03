@@ -51,8 +51,6 @@ def normalize_log(img, min_v, max_v):
     img = (np.log(img) / np.log(max_v)).astype(np.float64)
     return img
 
-
-
 def main(args):
     npy_files = sorted(glob(f'{args.src_dir}/*'))
     for file in tqdm(npy_files):
